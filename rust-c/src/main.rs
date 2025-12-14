@@ -1,24 +1,88 @@
 use std::env; // Bring the env module
-use std::fs;
 mod lexer;
 
 fn main() {
-    let args: Vec<String> = env::args().collect(); // collect turns iterator into a vector containing all the values produced by the iterator.
-    // dbg!(args); // debugging 
+    let args: Vec<String> = env::args().collect();
 
-    /*
-    Option <T> = either
-    - Some(T)   // there is a value
-    - None      // there is no value 
-    args.get(1) = Some(&String) or None
-    */
-    if let Some(file_path) = args.get(1) { // We have to check whether the file input exists, args.get() returns a value
-        println!("Input file is: {file_path}");
-        let file_contents = fs::read_to_string(file_path).
-                            expect("Should have been able to read the file");
-        lexer::lex(&file_contents);
+    match args.get(1) {
+        Some(file_path) if file_path.ends_with(".c") => {
+            println!("Input file is: {file_path}");
+
+            let config: Config = match Config::new(&args) {
+                Ok(cfg) => cfg,
+                Err(msg) => {
+                    eprintln!("{msg}");
+                    return;
+                }
+            };
+
+            match config.mode {
+                Mode::Lex => {
+                    println!("Mode: Lex");
+                    lexer::lex(&config.file_path.to_string());
+                },
+                Mode::Parse => println!("Mode: Parse"),
+                Mode::Codegen => println!("Mode: Codegen"),
+            }
+        }
+        Some(_file_path) => {
+            eprintln!("Please provide a .c file");
+        }
+        None => {
+            eprintln!("Usage: rust-c <file> <optional flag(s)>");
+        }
     }
-    else {
-        eprintln!("Usage: rust-c <file> <optional flag(s)>");
+}
+
+enum Mode {
+    Lex,
+    Parse,
+    Codegen,
+}
+
+struct Config {
+    file_path: String,
+    mode: Mode,
+}
+
+impl Config {
+    fn new(args: &[String]) -> Result<Config, String> {
+        // main already checked args.get(1), but keeping this safe makes Config reusable
+        let file_path = args
+            .get(1)
+            .ok_or_else(|| "Usage: rust-c <file> <optional flag(s)>".to_string())?
+            .clone();
+
+        let mut mode = Mode::Codegen; // default mode
+
+        for arg in args.iter().skip(2) {
+            match arg.as_str() {
+                "--lex" => mode = Mode::Lex,
+                "--parse" => mode = Mode::Parse,
+                "--codegen" => mode = Mode::Codegen,
+                other => return Err(format!("Unknown flag: {other}")),
+            }
+        }
+
+        Ok(Config { file_path, mode })
     }
+}
+
+// Deprecated function
+fn _parse_config(args: &[String]) -> Config { 
+    // args[1] is guaranteed to exist here because main checked args.get(1)
+    let file_path = args[1].clone();
+
+    let mut mode: Mode = Mode::Codegen; // default mode
+
+    for arg in &args[2..] {
+        match arg.as_str() {
+            "--lex" => mode = Mode::Lex,
+            "--parse" => mode = Mode::Parse,
+            "--codegen" => mode = Mode::Codegen,
+            other => eprintln!("Unknown flag: {other}"),
+        }
+    }
+
+    Config { file_path, mode }
 }
